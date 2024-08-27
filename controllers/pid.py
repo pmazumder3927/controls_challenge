@@ -1,20 +1,59 @@
 from . import BaseController
 import numpy as np
+import torch
+import torch.nn as nn
+from mlp import MLP
+import os
+import time
+import pickle
+from mlp import MLPFeedForward
+
 
 class Controller(BaseController):
-  """
-  A simple PID controller
-  """
-  def __init__(self,):
-    self.p = 0.3
-    self.i = 0.05
-    self.d = -0.1
-    self.error_integral = 0
-    self.prev_error = 0
+    """
+    A simple PID controller
+    """
 
-  def update(self, target_lataccel, current_lataccel, state, future_plan):
-      error = (target_lataccel - current_lataccel)
-      self.error_integral += error
-      error_diff = error - self.prev_error
-      self.prev_error = error
-      return self.p * error + self.i * self.error_integral + self.d * error_diff
+    def __init__(self,):
+        self.p = 0.1
+        self.i = 0.05
+        self.d = 0
+        self.error_integral = 0
+        self.prev_error = 0
+        self.mlp = MLPFeedForward(
+            model_path='./mlp_model.pth', scaler_path='./scaler.pkl')
+        self.output = np.linspace(-2, 2, 600)
+        self.step = 0
+        self.last_action = 0
+        self.last_state = None
+        self.last_target_lataccel = None
+        # create a unique file name
+        self.data_file_name = f'./fake_data/data_{time.time()}.csv'
+        if os.path.exists(self.data_file_name):
+            self.data_file = open(self.data_file_name, 'a')
+        else:
+            self.data_file = open(self.data_file_name, 'w')
+            self.data_file.write(
+                't,vEgo,aEgo,roll,targetLateralAcceleration,steerCommand\n')
+
+    def update(self, target_lataccel, current_lataccel, state, future_plan):
+        # breakpoint
+        error = (target_lataccel - current_lataccel)
+        self.error_integral += error
+        error_diff = error - self.prev_error
+        self.prev_error = error
+        # simple pid
+        pid = self.p * error + self.i * self.error_integral + self.d * error_diff
+        model_input = np.array(
+            [state.v_ego, state.a_ego, state.roll_lataccel, target_lataccel])
+        ff = self.mlp.infer(model_input)
+        return ff + pid
+
+        # # log last state and current lat accel
+        # if self.last_state is not None:
+        #     self.data_file.write(
+        #         f'{self.step-1},{self.last_state.v_ego},{self.last_state.a_ego},{self.last_state.roll_lataccel},{current_lataccel},{self.output[self.step-1]}\n')
+        # self.last_state = state
+        # self.last_target_lataccel = target_lataccel
+        # self.step += 1
+        # return self.output[self.step-1]
