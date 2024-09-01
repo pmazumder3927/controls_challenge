@@ -4,3 +4,7 @@ report.html
 models/tinyphysics_*.onnx
 *.swp
 /fake_data
+/logs
+/models
+/ppo_tensorboard
+/wandb
